@@ -13,12 +13,16 @@ let
 
   cfg = config.services.esphome;
 
+  format = pkgs.formats.yaml {};
+  configDir = pkgs.writeTextDir "esphome.yaml" (builtins.readFile (format.generate "x" cfg.settings));
+
   stateDir = "/var/lib/esphome";
 
   esphomeParams =
     if cfg.enableUnixSocket
     then "--socket /run/esphome/esphome.sock"
     else "--address ${cfg.address} --port ${toString cfg.port}";
+
 in
 {
   meta.maintainers = with maintainers; [ oddlama ];
@@ -68,6 +72,17 @@ in
       '';
       type = types.listOf types.str;
     };
+
+    settings = mkOption {
+      type = format.type;
+      description = lib.mdDoc ''
+        esphome configuration as a Nix attribute set.
+      '';
+      default = {};
+      example = {
+        api = {};
+      };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -83,7 +98,11 @@ in
       environment.PLATFORMIO_CORE_DIR = "${stateDir}/.platformio";
 
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/esphome dashboard ${esphomeParams} ${stateDir}";
+        ExecStart = ''${cfg.package}/bin/esphome dashboard \
+          ${esphomeParams} \
+          ${stateDir} \
+          ${lib.optionalString (cfg.settings != {}) " ${configDir}"}
+        '';
         DynamicUser = true;
         User = "esphome";
         Group = "esphome";
